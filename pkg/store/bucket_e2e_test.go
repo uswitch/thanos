@@ -9,20 +9,31 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oklog/ulid"
-
 	"github.com/go-kit/kit/log"
+	"github.com/oklog/ulid"
 	"github.com/pkg/errors"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/tsdb/labels"
 	"github.com/thanos-io/thanos/pkg/block"
 	"github.com/thanos-io/thanos/pkg/block/metadata"
+	"github.com/thanos-io/thanos/pkg/model"
 	"github.com/thanos-io/thanos/pkg/objstore"
 	"github.com/thanos-io/thanos/pkg/objstore/objtesting"
 	"github.com/thanos-io/thanos/pkg/runutil"
 	storecache "github.com/thanos-io/thanos/pkg/store/cache"
 	"github.com/thanos-io/thanos/pkg/store/storepb"
 	"github.com/thanos-io/thanos/pkg/testutil"
+)
+
+var (
+	minTime         = time.Unix(0, 0)
+	maxTime, _      = time.Parse(time.RFC3339, "9999-12-31T23:59:59Z")
+	minTimeDuration = model.TimeOrDurationValue{Time: &minTime}
+	maxTimeDuration = model.TimeOrDurationValue{Time: &maxTime}
+	filterConf      = &FilterConfig{
+		MinTime: minTimeDuration,
+		MaxTime: maxTimeDuration,
+	}
 )
 
 type noopCache struct{}
@@ -128,7 +139,7 @@ func prepareStoreWithTestBlocks(t testing.TB, dir string, bkt objstore.Bucket, m
 		testutil.Ok(t, os.RemoveAll(dir2))
 	}
 
-	store, err := NewBucketStore(s.logger, nil, bkt, dir, s.cache, 0, maxSampleCount, 20, false, 20)
+	store, err := NewBucketStore(s.logger, nil, bkt, dir, s.cache, 0, maxSampleCount, 20, false, 20, filterConf)
 	testutil.Ok(t, err)
 
 	s.store = store
