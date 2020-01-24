@@ -1,52 +1,79 @@
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: thanos-compactor
+  creationTimestamp: null
   labels:
     app: thanos-compactor
+  name: thanos-compactor
 spec:
+  podManagementPolicy: OrderedReady
   replicas: 1
+  revisionHistoryLimit: 10
   selector:
     matchLabels:
       app: thanos-compactor
   serviceName: thanos-compactor
   template:
     metadata:
+      creationTimestamp: null
       labels:
         app: thanos-compactor
     spec:
       containers:
-        - name: thanos
-          image: improbable/thanos:v0.3.1
-          args:
-            - compact
-            - --log.level=debug
-            - --data-dir=/data
-            - |
-              --objstore.config=type: S3
-              config:
-                bucket: demo-bucket
-                access_key: smth
-                secret_key: Need8Chars
-                endpoint: %%S3_ENDPOINT%%
-                insecure: true
-            - --sync-delay=30m
-            - --wait
-          ports:
-            - name: http
-              containerPort: 10902
-          livenessProbe:
-            httpGet:
-              port: 10902
-              path: /-/healthy
-          readinessProbe:
-            httpGet:
-              port: 10902
-              path: /-/ready
-          resources:
-            limits:
-              cpu: "1"
-              memory: 1Gi
-            requests:
-              cpu: "1"
-              memory: 1Gi
+      - args:
+        - compact
+        - --log.level=debug
+        - --data-dir=/data
+        - |
+          --objstore.config=type: S3
+          config:
+            bucket: demo-bucket
+            access_key: smth
+            secret_key: Need8Chars
+            endpoint: %%S3_ENDPOINT%%
+            insecure: true
+        - --sync-delay=30m
+        - --wait
+        image: improbable/thanos:v0.3.1
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /-/healthy
+            port: 10902
+            scheme: HTTP
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: thanos
+        ports:
+        - containerPort: 10902
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /-/ready
+            port: 10902
+            scheme: HTTP
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: "1"
+            memory: 1Gi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+  updateStrategy:
+    type: OnDelete
+status:
+  replicas: 0

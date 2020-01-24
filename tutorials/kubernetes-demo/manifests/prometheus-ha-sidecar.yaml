@@ -64,102 +64,126 @@ spec:
   selector:
     statefulset.kubernetes.io/pod-name: prometheus-1
   type: NodePort
----
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: prometheus
+  creationTimestamp: null
   labels:
     app: prometheus
+  name: prometheus
 spec:
-  serviceName: "prometheus"
+  podManagementPolicy: OrderedReady
   replicas: 2
+  revisionHistoryLimit: 10
   selector:
     matchLabels:
       app: prometheus
+  serviceName: prometheus
   template:
     metadata:
+      creationTimestamp: null
       labels:
         app: prometheus
-        # We will use this label to put all StoreAPis
-        # under the same headless service for
-        # SRV lookup: thanos-store-api.default.svc
         thanos-store-api: "true"
     spec:
+      containers:
+      - args:
+        - --config.file=/etc/prometheus-shared/prometheus.yaml
+        - --storage.tsdb.path=/var/prometheus
+        - --web.enable-lifecycle
+        - --storage.tsdb.retention=2w
+        image: quay.io/prometheus/prometheus:v2.6.1
+        imagePullPolicy: IfNotPresent
+        name: prometheus
+        ports:
+        - containerPort: 9090
+          name: http-prometheus
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/prometheus-shared
+          name: config-shared
+        - mountPath: /etc/prometheus/rules
+          name: rules
+        - mountPath: /var/prometheus
+          name: prometheus
+      - args:
+        - sidecar
+        - --log.level=debug
+        - --tsdb.path=/var/prometheus
+        - --prometheus.url=http://localhost:9090
+        - --cluster.disable
+        - --reloader.config-file=/etc/prometheus/prometheus.yaml.tmpl
+        - --reloader.config-envsubst-file=/etc/prometheus-shared/prometheus.yaml
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        image: improbable/thanos:v0.3.1
+        imagePullPolicy: IfNotPresent
+        name: thanos
+        ports:
+        - containerPort: 10902
+          name: http-sidecar
+          protocol: TCP
+        - containerPort: 10901
+          name: grpc
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /var/prometheus
+          name: prometheus
+        - mountPath: /etc/prometheus-shared
+          name: config-shared
+        - mountPath: /etc/prometheus
+          name: config
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
       securityContext:
-        runAsUser: 1000
         fsGroup: 2000
         runAsNonRoot: true
+        runAsUser: 1000
+      serviceAccount: prometheus
       serviceAccountName: prometheus
-      containers:
-      - name: prometheus
-        image: quay.io/prometheus/prometheus:v2.6.1
-        args:
-          - --config.file=/etc/prometheus-shared/prometheus.yaml
-          - --storage.tsdb.path=/var/prometheus
-          - --web.enable-lifecycle
-          - --storage.tsdb.retention=2w
-        ports:
-          - name: http-prometheus
-            containerPort: 9090
-        volumeMounts:
-          - name: config-shared
-            mountPath: /etc/prometheus-shared
-          - name: rules
-            mountPath: /etc/prometheus/rules
-          - name: prometheus
-            mountPath: /var/prometheus
-      - name: thanos
-        image: improbable/thanos:v0.3.1
-        args:
-          - sidecar
-          - --log.level=debug
-          - --tsdb.path=/var/prometheus
-          - --prometheus.url=http://localhost:9090
-          - --cluster.disable
-          - --reloader.config-file=/etc/prometheus/prometheus.yaml.tmpl
-          - --reloader.config-envsubst-file=/etc/prometheus-shared/prometheus.yaml
-        env:
-          - name: POD_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.name
-        ports:
-          - name: http-sidecar
-            containerPort: 10902
-          - name: grpc
-            containerPort: 10901
-        volumeMounts:
-          - name: prometheus
-            mountPath: /var/prometheus
-          - name: config-shared
-            mountPath: /etc/prometheus-shared
-          - name: config
-            mountPath: /etc/prometheus
+      terminationGracePeriodSeconds: 30
       volumes:
-        - name: config
-          configMap:
-            name: prometheus
-        - name: rules
-          configMap:
-            name: prometheus-rules
-        - name: config-shared
-          emptyDir: {}
+      - configMap:
+          defaultMode: 420
+          name: prometheus
+        name: config
+      - configMap:
+          defaultMode: 420
+          name: prometheus-rules
+        name: rules
+      - emptyDir: {}
+        name: config-shared
   updateStrategy:
     type: RollingUpdate
   volumeClaimTemplates:
   - metadata:
+      creationTimestamp: null
       labels:
         app: prometheus
       name: prometheus
     spec:
-      storageClassName: prom-manual
       accessModes:
-        - ReadWriteOnce
+      - ReadWriteOnce
       resources:
         requests:
-          # Normally, probably 15x more (:
           storage: 4Gi
+      storageClassName: prom-manual
+      volumeMode: Filesystem
+    status:
+      phase: Pending
+status:
+  replicas: 0
 ---
 apiVersion: v1
 kind: ConfigMap

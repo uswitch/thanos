@@ -24,72 +24,90 @@ data:
         for: 15s # for demo purposes
         labels:
           severity: critical
----
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
+  creationTimestamp: null
   labels:
     app: thanos-ruler
   name: thanos-ruler
 spec:
+  podManagementPolicy: OrderedReady
   replicas: 1
+  revisionHistoryLimit: 10
   selector:
     matchLabels:
       app: thanos-ruler
   serviceName: thanos-ruler
   template:
     metadata:
+      creationTimestamp: null
       labels:
         app: thanos-ruler
         thanos-store-api: "true"
     spec:
       containers:
-        - name: thanos
-          image: improbable/thanos:v0.3.1
-          args:
-            - rule
-            - --log.level=debug
-            - --data-dir=/data
-            - --eval-interval=15s
-            - --cluster.disable
-            - --rule-file=/etc/thanos-ruler/*.rules.yaml
-            - --alertmanagers.url=http://%%ALERTMANAGER_URL%%
-            - --query=thanos-querier.default.svc:9090
-            - |
-              --objstore.config=type: S3
-              config:
-                bucket: demo-bucket
-                access_key: smth
-                secret_key: Need8Chars
-                endpoint: %%S3_ENDPOINT%%
-                insecure: true
-            # We don't want to override underlying metric's cluster label.
-            - --label=ruler_cluster="%%CLUSTER%%"
-            - --label=replica="$(POD_NAME)"
-          env:
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-          ports:
-            - name: http
-              containerPort: 10902
-            - name: grpc
-              containerPort: 10901
-          resources:
-            limits:
-              cpu: 500m
-              memory: 500Mi
-            requests:
-              cpu: 500m
-              memory: 500Mi
-          volumeMounts:
-            - mountPath: /etc/thanos-ruler
-              name: config
-      volumes:
-        - configMap:
-            name: thanos-ruler-rules
+      - args:
+        - rule
+        - --log.level=debug
+        - --data-dir=/data
+        - --eval-interval=15s
+        - --cluster.disable
+        - --rule-file=/etc/thanos-ruler/*.rules.yaml
+        - --alertmanagers.url=http://%%ALERTMANAGER_URL%%
+        - --query=thanos-querier.default.svc:9090
+        - |
+          --objstore.config=type: S3
+          config:
+            bucket: demo-bucket
+            access_key: smth
+            secret_key: Need8Chars
+            endpoint: %%S3_ENDPOINT%%
+            insecure: true
+        - --label=ruler_cluster="%%CLUSTER%%"
+        - --label=replica="$(POD_NAME)"
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        image: improbable/thanos:v0.3.1
+        imagePullPolicy: IfNotPresent
+        name: thanos
+        ports:
+        - containerPort: 10902
+          name: http
+          protocol: TCP
+        - containerPort: 10901
+          name: grpc
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 500m
+            memory: 500Mi
+          requests:
+            cpu: 500m
+            memory: 500Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/thanos-ruler
           name: config
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: thanos-ruler-rules
+        name: config
+  updateStrategy:
+    type: OnDelete
+status:
+  replicas: 0
 ---
 apiVersion: v1
 kind: Service
