@@ -14,8 +14,8 @@ spec:
   selector:
     statefulset.kubernetes.io/pod-name: prometheus-0
   type: NodePort
-# We want to be able to access each replica.
 ---
+# We want to be able to access each replica.
 apiVersion: v1
 kind: Service
 metadata:
