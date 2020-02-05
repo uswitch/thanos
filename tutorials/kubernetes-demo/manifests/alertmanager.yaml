@@ -1,4 +1,5 @@
 kind: PersistentVolume
+---
 apiVersion: v1
 metadata:
   name: pv-alertmanager-0
@@ -12,6 +13,7 @@ spec:
     - ReadWriteOnce
   hostPath:
     path: "/data/pv-alertmanager-0"
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:

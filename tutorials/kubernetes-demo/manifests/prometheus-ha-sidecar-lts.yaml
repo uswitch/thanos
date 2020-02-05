@@ -1,3 +1,4 @@
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -13,8 +14,8 @@ spec:
   selector:
     statefulset.kubernetes.io/pod-name: prometheus-0
   type: NodePort
----
 # We want to be able to access each replica.
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -30,9 +31,9 @@ spec:
   selector:
     statefulset.kubernetes.io/pod-name: prometheus-1
   type: NodePort
----
 # minikube limitation:
 # https://github.com/kubernetes/minikube/issues/3351#issuecomment-459898556
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -64,6 +65,7 @@ spec:
   selector:
     statefulset.kubernetes.io/pod-name: prometheus-1
   type: NodePort
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
